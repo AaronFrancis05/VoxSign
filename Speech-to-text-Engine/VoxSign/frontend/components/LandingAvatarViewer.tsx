@@ -37,6 +37,7 @@ export default function LandingAvatarViewer({
   const activeActionRef = useRef<THREE.AnimationAction | null>(null);
   const isRecordingRef = useRef(isRecording);
   const onAnimationCompleteRef = useRef(onAnimationComplete);
+  const modelReadyRef = useRef(false);
 
   // Sync refs with latest prop values so callbacks inside animate/loader close over fresh values
   useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
@@ -47,30 +48,36 @@ export default function LandingAvatarViewer({
 
   // Handle playing animation once on trigger
   useEffect(() => {
-    if (triggerAnimation && mixerRef.current && animationsRef.current.length > 0) {
-      const mixer = mixerRef.current;
-      
-      // Stop any existing playing action
-      if (activeActionRef.current) {
-        activeActionRef.current.stop();
-      }
+    if (!triggerAnimation) return;
+    if (!mixerRef.current || !animationsRef.current.length) return;
 
-      // Find 'rigAction' or fallback to the first clip
-      const clip =
-        animationsRef.current.find((c) => c.name === "rigAction") ||
-        animationsRef.current[0];
-
-      if (clip) {
-        const action = mixer.clipAction(clip);
-        action.reset();
-        action.timeScale = ANIMATION_SPEED;
-        action.setLoop(THREE.LoopOnce, 1);
-        action.clampWhenFinished = false; // ensure returning to rest pose
-        activeActionRef.current = action;
-        action.play();
-      }
-    }
+    playSignAnimation();
   }, [triggerAnimation]);
+
+  const playSignAnimation = () => {
+    const mixer = mixerRef.current;
+    if (!mixer) return;
+
+    // Stop any existing playing action
+    if (activeActionRef.current) {
+      activeActionRef.current.stop();
+    }
+
+    // Find 'rigAction' or fallback to the first clip
+    const clip =
+      animationsRef.current.find((c) => c.name === "rigAction") ||
+      animationsRef.current[0];
+
+    if (clip) {
+      const action = mixer.clipAction(clip);
+      action.reset();
+      action.timeScale = ANIMATION_SPEED;
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = false; // ensure returning to rest pose
+      activeActionRef.current = action;
+      action.play();
+    }
+  };
 
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
@@ -195,7 +202,13 @@ export default function LandingAvatarViewer({
           });
         }
 
+        modelReadyRef.current = true;
         setLoading(false);
+
+        // If triggerAnimation was already set before model loaded, play now
+        if (triggerAnimation) {
+          playSignAnimation();
+        }
       },
       (xhr) => {
         if (xhr.total > 0) {
