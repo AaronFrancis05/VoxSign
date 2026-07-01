@@ -6,8 +6,8 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 // Tune this to adjust sign-language playback speed.
-// >1 = faster, <1 = slower. 1.3 gives a natural sign-language cadence.
-const ANIMATION_SPEED = 1.3;
+// >1 = faster, <1 = slower. 0.9 gives a natural sign-language cadence.
+const ANIMATION_SPEED = 0.9;
 
 interface LandingAvatarViewerProps {
   modelUrl: string;
