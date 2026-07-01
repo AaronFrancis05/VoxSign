@@ -17,6 +17,10 @@ const AvatarViewer = dynamic(() => import("@/components/AvatarViewer"), {
   ssr: false,
 });
 
+const LandingAvatarViewer = dynamic(() => import("@/components/LandingAvatarViewer"), {
+  ssr: false,
+});
+
 type ActiveTab = "signing" | "asr";
 
 const RECORDER_MIME_TYPES = [
@@ -58,6 +62,167 @@ export default function DashboardPage() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const simulationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Good-Morning demo banner state
+  const [demoRecording, setDemoRecording] = useState(false);
+  const [demoTranscribing, setDemoTranscribing] = useState(false);
+  const [demoDots, setDemoDots] = useState("");
+  const [triggerAnimation, setTriggerAnimation] = useState(false);
+  const [demoFeedback, setDemoFeedback] = useState("");
+  const [demoFeedbackType, setDemoFeedbackType] = useState<"success" | "error" | null>(null);
+  const [demoLongWait, setDemoLongWait] = useState(false);
+
+  const demoMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const demoMediaStreamRef = useRef<MediaStream | null>(null);
+  const demoAudioChunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    if (demoTranscribing) {
+      const timer = setTimeout(() => setDemoLongWait(true), 10000);
+      return () => clearTimeout(timer);
+    }
+    setDemoLongWait(false);
+  }, [demoTranscribing]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (demoRecording) {
+      interval = setInterval(() => {
+        setDemoDots((prev) => (prev.length >= 3 ? "" : `${prev}.`));
+      }, 500);
+    }
+    return () => { if (interval) clearInterval(interval); setDemoDots(""); };
+  }, [demoRecording]);
+
+  const stopDemoStream = () => {
+    demoMediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    demoMediaStreamRef.current = null;
+  };
+
+  const normalizeText = (text: string) => {
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "")
+      .replace(/\s+/g, " ");
+  };
+
+  const handleDemoTranscript = (text: string) => {
+    if (!text) {
+      setDemoFeedback("We didn't hear anything. Try saying 'good morning'!");
+      setDemoFeedbackType("error");
+      return;
+    }
+    const normalized = normalizeText(text);
+    if (normalized.includes("good morning")) {
+      setDemoFeedback("Greeting recognized! Watch the avatar respond.");
+      setDemoFeedbackType("success");
+      setTriggerAnimation(true);
+    } else {
+      setDemoFeedback(`Didn't catch that (you said: "${text}"). Try saying 'good morning'!`);
+      setDemoFeedbackType("error");
+    }
+  };
+
+  const demoUploadRecording = async (audioBlob: Blob, mimeType: string) => {
+    const formData = new FormData();
+    const extension = getFileExtension(mimeType);
+    formData.append("audio", audioBlob, `recording.${extension}`);
+    const response = await api.post("/transcribe", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    const transcription =
+      response.data?.transcription ??
+      response.data?.text ??
+      response.data?.result ??
+      "";
+    return typeof transcription === "string" ? transcription.trim() : "";
+  };
+
+  const startDemoRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      demoMediaStreamRef.current = stream;
+      setDemoFeedback("");
+      setDemoFeedbackType(null);
+      setDemoLongWait(false);
+      demoAudioChunksRef.current = [];
+
+      if (typeof MediaRecorder === "undefined") {
+        message.error("This device does not support audio recording.");
+        stopDemoStream();
+        return;
+      }
+
+      const mimeType = pickSupportedMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      demoMediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          demoAudioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const resolvedMimeType = recorder.mimeType || mimeType || "audio/webm";
+        const audioBlob = new Blob(demoAudioChunksRef.current, { type: resolvedMimeType });
+
+        stopDemoStream();
+        demoMediaRecorderRef.current = null;
+        demoAudioChunksRef.current = [];
+
+        if (!audioBlob.size) {
+          setDemoTranscribing(false);
+          message.error("No audio was captured. Please try again.");
+          return;
+        }
+
+        setDemoTranscribing(true);
+        demoUploadRecording(audioBlob, resolvedMimeType)
+          .then((text) => handleDemoTranscript(text))
+          .catch((error) => {
+            console.error("Demo transcription error:", error);
+            message.error("Transcription failed. Please try again.");
+            setDemoFeedback("Transcription failed. Check backend API.");
+            setDemoFeedbackType("error");
+          })
+          .finally(() => setDemoTranscribing(false));
+      };
+
+      recorder.start();
+      setDemoRecording(true);
+    } catch (error) {
+      console.error("Error accessing microphone:", error);
+      message.error("Could not access microphone. Please check permissions.");
+      stopDemoStream();
+      setDemoRecording(false);
+      setDemoTranscribing(false);
+    }
+  };
+
+  const stopDemoRecording = () => {
+    if (!demoRecording) return;
+    setDemoRecording(false);
+    setDemoTranscribing(true);
+    const recorder = demoMediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+      return;
+    }
+    stopDemoStream();
+    setDemoTranscribing(false);
+  };
+
+  const toggleDemoRecording = () => {
+    if (demoRecording) stopDemoRecording();
+    else void startDemoRecording();
+  };
+
+  const handleAnimationComplete = () => setTriggerAnimation(false);
 
   const stopSimulation = () => {
     if (simulationTimeoutRef.current) {
@@ -268,6 +433,11 @@ export default function DashboardPage() {
         recorder.stop();
       }
       stopMediaStream();
+      const demoRecorder = demoMediaRecorderRef.current;
+      if (demoRecorder && demoRecorder.state !== "inactive") {
+        demoRecorder.stop();
+      }
+      stopDemoStream();
     };
   }, []);
 
@@ -474,6 +644,80 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <div className="mx-auto flex w-full max-w-[560px] flex-col items-center px-5 py-6 md:px-6">
+        {/* Good-Morning Demo Banner */}
+        <div className="w-full mb-8 rounded-[28px] bg-gradient-to-b from-[#EBF4FF] to-white p-1.5 shadow-[0_12px_30px_rgba(31,82,152,0.1)] border border-white/80">
+          <div className="relative overflow-hidden rounded-[24px] bg-white/80 p-4">
+            <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-[#FFD8A8]/30 via-[#FFF0D7]/30 to-[#DDEBFF]/30" />
+            <div className="relative z-10 flex flex-col items-center">
+              <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-[#2E6BFF] mb-2">
+                Try the Good Morning Demo
+              </h2>
+              <div className="w-full max-w-[280px] h-[240px] rounded-[20px] border border-white bg-gradient-to-b from-[#FFFDFB] via-white to-[#F0F7FF] shadow-[0_8px_20px_rgba(31,82,152,0.08)] overflow-hidden">
+                <LandingAvatarViewer
+                  modelUrl="/good-morning.glb"
+                  triggerAnimation={triggerAnimation}
+                  onAnimationComplete={handleAnimationComplete}
+                />
+              </div>
+
+              {/* Demo feedback */}
+              <div className="mt-3 w-full min-h-[48px] flex items-center justify-center rounded-[16px] border border-[#ECF1F7] bg-[#FBFDFF] px-4 py-2 shadow-inner text-center">
+                {demoRecording ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-sm font-bold tracking-[0.12em] text-[#FF4D4F]">RECORDING{demoDots}</span>
+                    <p className="text-xs italic text-[#7C8AA5]">Say &quot;Good Morning&quot;...</p>
+                  </div>
+                ) : demoTranscribing ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-sm font-bold tracking-[0.12em] text-[#2E6BFF]">TRANSCRIBING{demoDots}</span>
+                    <p className="text-xs italic text-[#7C8AA5]">
+                      {demoLongWait ? "Still processing, this can take a bit on first use..." : "Analyzing audio..."}
+                    </p>
+                  </div>
+                ) : demoFeedback ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className={`text-xs font-semibold uppercase tracking-wider ${demoFeedbackType === "success" ? "text-[#52C41A]" : "text-[#FF4D4F]"}`}>
+                      {demoFeedbackType === "success" ? "Greeting Recognized" : "Try Again"}
+                    </span>
+                    <p className={`text-sm font-medium leading-snug ${demoFeedbackType === "success" ? "text-[#237804]" : "text-[#A8071A]"}`}>
+                      {demoFeedback}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm font-medium italic text-[#5A6A85]">
+                    &quot;Tap LISTEN and say &apos;good morning&apos;&quot;
+                  </p>
+                )}
+              </div>
+
+              {/* Demo recording button */}
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={toggleDemoRecording}
+                  disabled={demoTranscribing}
+                  className={`flex items-center justify-center gap-3 rounded-full px-6 py-2.5 text-sm text-white shadow-md transition-all cursor-pointer select-none disabled:opacity-70 ${
+                    demoRecording
+                      ? "bg-red-500 shadow-red-200 hover:bg-red-600 hover:scale-[1.01]"
+                      : "bg-gradient-to-r from-[#1FB6FF] to-[#2E6BFF] shadow-blue-200 hover:scale-[1.02]"
+                  }`}
+                >
+                  <div className={`${demoRecording ? "bg-white/30" : "bg-white/15"} rounded-full p-1.5 flex items-center justify-center`}>
+                    {demoRecording ? (
+                      <div className="h-3 w-3 rounded-[2px] bg-white animate-pulse" />
+                    ) : (
+                      <AudioOutlined style={{ fontSize: "14px", color: "white" }} />
+                    )}
+                  </div>
+                  <span className="font-bold tracking-[0.12em] text-sm">
+                    {demoRecording ? "STOP" : "LISTEN"}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {renderTabs()}
 
         <div className="w-full pb-8 pt-5">
