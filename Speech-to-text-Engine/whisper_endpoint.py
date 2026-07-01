@@ -169,6 +169,8 @@ with cuda_image.imports():
     image=cuda_image, 
     secrets=[modal.Secret.from_name("huggingface-secret")],
     gpu=GPU, 
+    memory=4096,
+    timeout=600,
     scaledown_window=SCALEDOWN, 
     enable_memory_snapshot=True,
     volumes={MODEL_MOUNT_DIR: volume})
@@ -197,8 +199,26 @@ class Transcriber:
     ):
         import tempfile
         import os
+        import logging
 
-        print("Received request. File size:", len(wav))
+        logger = logging.getLogger(__name__)
+        file_size = len(wav)
+
+        print(f"Received request. File size: {file_size} bytes")
+
+        # ── Input validation ──────────────────────────────────────────────
+        if file_size == 0:
+            print("REJECTED: empty upload (0 bytes)")
+            return {"error": "Empty audio file received."}
+
+        MIN_WAV_SIZE = 48  # smallest valid WAV header + 1 sample
+        if file_size < MIN_WAV_SIZE:
+            print(f"REJECTED: file too small ({file_size} bytes) — likely corrupt or truncated")
+            return {"error": f"Audio file too small ({file_size} bytes)."}
+
+        # Log initial bytes for diagnostic purposes
+        header_hex = wav[:16].hex()
+        print(f"File header (first 16 bytes): {header_hex}")
 
         # ✅ Save to temp file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
@@ -207,21 +227,37 @@ class Transcriber:
 
         print("Saved temp file:", temp_path)
 
+        audio_array = None
         try:
-            # ✅ Load properly
-            audio_array, _ = librosa.load(temp_path, sr=SAMPLE_RATE)
+            try:
+                audio_array, _ = librosa.load(temp_path, sr=SAMPLE_RATE)
+            except Exception as load_err:
+                print(f"AUDIO LOAD FAILURE — Size: {file_size}, Header: {header_hex}, Error: {load_err}")
+                return {"error": f"Failed to decode audio: {load_err}"}
 
-            print("Audio loaded. Shape:", audio_array.shape)
+            if audio_array is None or len(audio_array) == 0:
+                print(f"AUDIO LOAD FAILURE — librosa returned empty array (size={file_size}, header={header_hex})")
+                return {"error": "Decoded audio is empty. The file may be corrupt or silent."}
 
-            result = transcribe_with_fasterwhisper(
-                self.whisper_model,
-                audio_array,
-                language,
-                get_transcript_only=False,
-                use_word_timestamps=use_word_timestamps
-            )
+            duration = len(audio_array) / SAMPLE_RATE
+            print(f"Audio loaded successfully. Samples: {len(audio_array)}, Duration: {duration:.2f}s, Format: audio/wav")
+
+            try:
+                result = transcribe_with_fasterwhisper(
+                    self.whisper_model,
+                    audio_array,
+                    language,
+                    get_transcript_only=False,
+                    use_word_timestamps=use_word_timestamps
+                )
+            except Exception as transcribe_err:
+                print(f"TRANSCRIPTION FAILURE — Size: {file_size}, Duration: {duration:.2f}s, "
+                      f"Header: {header_hex}, Error: {transcribe_err}")
+                return {"error": f"Transcription pipeline error: {transcribe_err}"}
 
             return result
 
         finally:
             os.remove(temp_path)
+            if audio_array is not None:
+                del audio_array

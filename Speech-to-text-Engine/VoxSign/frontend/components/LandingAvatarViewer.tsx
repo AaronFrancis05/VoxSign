@@ -5,6 +5,10 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
+// Tune this to adjust sign-language playback speed.
+// >1 = faster, <1 = slower. 1.3 gives a natural sign-language cadence.
+const ANIMATION_SPEED = 1.3;
+
 interface LandingAvatarViewerProps {
   modelUrl: string;
   isRecording?: boolean;
@@ -59,6 +63,7 @@ export default function LandingAvatarViewer({
       if (clip) {
         const action = mixer.clipAction(clip);
         action.reset();
+        action.timeScale = ANIMATION_SPEED;
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = false; // ensure returning to rest pose
         activeActionRef.current = action;

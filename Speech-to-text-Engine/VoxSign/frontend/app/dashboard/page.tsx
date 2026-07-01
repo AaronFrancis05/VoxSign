@@ -400,14 +400,32 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="mt-6 flex w-full justify-center">
-        {renderRecordingButton(true)}
+      <div className="mt-6 flex w-full flex-col items-center gap-4 sm:flex-row sm:justify-center">
+        {renderRecordingButton()}
+        <button
+          type="button"
+          onClick={() => {
+            setFinalTranscript("Good Morning");
+            setTriggerAnimation(true);
+          }}
+          disabled={isRecording || isTranscribing}
+          className="flex items-center justify-center gap-3 rounded-full px-8 py-5 text-white shadow-xl transition-all disabled:cursor-not-allowed disabled:opacity-40 bg-gradient-to-r from-[#FF8C00] to-[#FFB347] shadow-orange-200 hover:scale-[1.02]"
+        >
+          <span className="text-xl font-semibold tracking-[0.18em]">
+            SIGN
+          </span>
+          <span className="text-sm font-medium tracking-wider">
+            Good Morning
+          </span>
+        </button>
       </div>
 
       <p className="mt-4 text-center text-sm text-[#8A97AE]">
         {isRecording
           ? "Listening now. The caption updates as you speak."
-          : "Use LISTEN to generate speech input for the signing avatar view."}
+          : isTranscribing
+            ? "Processing your recording."
+            : "Use LISTEN to generate speech input, or SIGN to demo the avatar."}
       </p>
     </>
   );
