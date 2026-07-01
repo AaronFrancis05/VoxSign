@@ -54,6 +54,17 @@ export default function Home() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Show a patience message if transcription takes >10s (cold-start Modal)
+  const [longWait, setLongWait] = useState(false);
+
+  useEffect(() => {
+    if (isTranscribing) {
+      const timer = setTimeout(() => setLongWait(true), 10000);
+      return () => clearTimeout(timer);
+    }
+    setLongWait(false);
+  }, [isTranscribing]);
+
   // Update animated dots for recording status
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -349,7 +360,11 @@ export default function Home() {
                     <span className="text-lg font-bold tracking-[0.15em] text-[#2E6BFF]">
                       TRANSCRIBING{dots}
                     </span>
-                    <p className="text-sm italic text-[#7C8AA5]">Analyzing audio input...</p>
+                    <p className="text-sm italic text-[#7C8AA5]">
+                      {longWait
+                        ? "Still processing, this can take a bit on first use..."
+                        : "Analyzing audio input..."}
+                    </p>
                   </div>
                 ) : feedbackMessage ? (
                   <div className="flex flex-col items-center gap-1.5">

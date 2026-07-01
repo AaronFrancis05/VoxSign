@@ -25,7 +25,6 @@ export const transcribeAudio = async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: "No audio file provided" });
         }
-        console.log("file received:", req.file);
         inputPath = req.file.path;
         // wavPath = path.join(
         //   path.dirname(inputPath),
@@ -53,11 +52,14 @@ export const transcribeAudio = async (req, res) => {
         const formData = new FormData();
         const blob = new Blob([fileBuffer], { type: mimeType });
         formData.append("wav", blob, fileName);
+        console.log("[Transcription] Sending to transcription API...");
         const response = await apiclient.post("/", formData, {
             headers: {
                 "Content-Type": "multipart/form-data",
             },
+            timeout: 120000, // 2-minute timeout for cold-start Modal
         });
+        console.log("[Transcription] Received response from transcription API");
         // Clean up temporary files
         if (inputPath && fs.existsSync(inputPath))
             fs.unlinkSync(inputPath);
