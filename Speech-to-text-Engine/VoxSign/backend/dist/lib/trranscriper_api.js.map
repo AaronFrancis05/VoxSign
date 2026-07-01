@@ -1,0 +1,1 @@
+{"version":3,"file":"trranscriper_api.js","sourceRoot":"","sources":["../../lib/trranscriper_api.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,OAAO,CAAC;AAE1B,MAAM,qBAAqB,GAAG,OAAO,CAAC,GAAG,CAAC,qBAAqB,CAAC;AAEhE,aAAa;AACb,MAAM,SAAS,GAAG,KAAK,CAAC,MAAM,CAAC;IAC7B,OAAO,EAAE,qBAAqB;IAC9B,OAAO,EAAE;QACP,cAAc,EAAE,kBAAkB;KACnC;CACF,CAAC,CAAC;AAEH,eAAe,SAAS,CAAC"}
