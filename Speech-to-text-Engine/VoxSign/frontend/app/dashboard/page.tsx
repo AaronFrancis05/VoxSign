@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import VoiceWaveform from "@/components/VoiceWaveform";
 import { message } from "antd";
 import { AudioOutlined } from "@ant-design/icons";
 import api from "@/lib/api";
@@ -46,6 +47,7 @@ export default function DashboardPage() {
   const [finalTranscript, setFinalTranscript] = useState("");
   const [dots, setDots] = useState("");
   const [triggerAnimation, setTriggerAnimation] = useState(false);
+  const [showPatienceMessage, setShowPatienceMessage] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -65,6 +67,14 @@ export default function DashboardPage() {
       setDots("");
     };
   }, [isRecording]);
+
+  useEffect(() => {
+    if (isTranscribing) {
+      const timer = setTimeout(() => setShowPatienceMessage(true), 10000);
+      return () => clearTimeout(timer);
+    }
+    setShowPatienceMessage(false);
+  }, [isTranscribing]);
 
   const stopMediaStream = () => {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -285,12 +295,24 @@ export default function DashboardPage() {
     <>
       <div className="w-full rounded-[36px] border border-[#E7EEF8] bg-white p-8 shadow-sm">
         <div className="flex min-h-[360px] w-full items-center justify-center rounded-[28px] bg-gradient-to-b from-[#F6FAFE] to-white px-6 py-10">
-          {isRecording || isTranscribing ? (
+          {isRecording ? (
             <div className="flex flex-col items-center text-center">
               <span className="mb-4 text-3xl font-bold tracking-[0.22em] text-[#2794FF]">
-                {isRecording ? `RECORDING${dots}` : `TRANSCRIBING${dots}`}
+                RECORDING{dots}
               </span>
               <p className="text-lg italic text-[#7C8AA5]">Speak now...</p>
+            </div>
+          ) : isTranscribing ? (
+            <div className="flex flex-col items-center text-center">
+              <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-[#2794FF] border-t-transparent" />
+              <span className="text-2xl font-bold tracking-[0.22em] text-[#2794FF]">
+                TRANSCRIBING
+              </span>
+              <p className="mt-2 text-base italic text-[#7C8AA5]">
+                {showPatienceMessage
+                  ? "Still processing, this can take a bit longer..."
+                  : "Processing your audio..."}
+              </p>
             </div>
           ) : (
             <div className="flex min-h-[260px] w-full items-center justify-center rounded-[30px] border border-[#ECF1F7] bg-[#FBFDFF] p-8 shadow-inner">
@@ -301,6 +323,12 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {isRecording && (
+        <div className="mt-4 w-full">
+          <VoiceWaveform mediaStreamRef={mediaStreamRef} isActive={isRecording} />
+        </div>
+      )}
 
       <div className="mt-8 flex w-full justify-center">
         {renderRecordingButton()}
@@ -374,58 +402,50 @@ export default function DashboardPage() {
                 onAnimationComplete={handleAnimationComplete}
               />
             </div>
-
-            {/* <div className="relative flex flex-col items-center">
-              <div className="h-[88px] w-[88px] rounded-full border-[6px] border-[#173F7A] bg-gradient-to-b from-[#FFDAB6] to-[#F2B48A]" />
-              <div className="mt-3 h-12 w-7 rounded-full bg-[#173F7A]" />
-              <div className="relative mt-[-2px] flex h-[170px] w-[210px] items-start justify-center rounded-[38px] bg-gradient-to-b from-[#2758A8] to-[#173F7A] pt-8">
-                <div className="absolute left-10 top-[74px] h-16 w-16 rotate-[18deg] rounded-[24px] border-4 border-[#0E2E60] bg-[#FFDAB6]" />
-                <div className="absolute right-10 top-[74px] h-16 w-16 rotate-[-18deg] rounded-[24px] border-4 border-[#0E2E60] bg-[#FFDAB6]" />
-                <div className="absolute left-[82px] top-[78px] h-14 w-14 rotate-45 rounded-[18px] border-4 border-[#0E2E60] bg-[#FFE5CA]" />
-                <div className="absolute right-[82px] top-[78px] h-14 w-14 -rotate-45 rounded-[18px] border-4 border-[#0E2E60] bg-[#FFE5CA]" />
-                <div className="flex gap-2">
-                  <span className="mt-8 h-16 w-3 rounded-full bg-white/70" />
-                  <span className="mt-4 h-20 w-3 rounded-full bg-white/80" />
-                  <span className="mt-9 h-14 w-3 rounded-full bg-white/60" />
-                </div>
-              </div>
-            </div> */}
           </div>
         </div>
       </div>
 
-      <div className="mt-5 w-full rounded-[26px] border border-[#E4EDF8] bg-white px-6 py-6 text-center shadow-sm">
-        <p className="text-2xl italic leading-relaxed text-[#4B5871]">
-          &quot;{transcriptQuote}&quot;
-        </p>
-      </div>
+      {isTranscribing && (
+        <div className="mt-5 w-full rounded-[26px] border border-[#E4EDF8] bg-white px-6 py-6 text-center shadow-sm">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#2E6BFF] border-t-transparent" />
+            <p className="text-xl font-bold tracking-[0.22em] text-[#2794FF]">
+              TRANSCRIBING
+            </p>
+            <p className="text-base italic text-[#7C8AA5]">
+              {showPatienceMessage
+                ? "Still processing, this can take a bit longer..."
+                : "Processing your audio..."}
+            </p>
+          </div>
+        </div>
+      )}
 
-      <div className="mt-6 flex w-full flex-col items-center gap-4 sm:flex-row sm:justify-center">
+      {!isTranscribing && (
+        <div className="mt-5 w-full rounded-[26px] border border-[#E4EDF8] bg-white px-6 py-6 text-center shadow-sm">
+          <p className="text-2xl italic leading-relaxed text-[#4B5871]">
+            &quot;{transcriptQuote}&quot;
+          </p>
+        </div>
+      )}
+
+      {isRecording && (
+        <div className="mt-4 w-full">
+          <VoiceWaveform mediaStreamRef={mediaStreamRef} isActive={isRecording} />
+        </div>
+      )}
+
+      <div className="mt-6 flex w-full justify-center">
         {renderRecordingButton()}
-        <button
-          type="button"
-          onClick={() => {
-            setFinalTranscript("Good Morning");
-            setTriggerAnimation(true);
-          }}
-          disabled={isRecording || isTranscribing}
-          className="flex items-center justify-center gap-3 rounded-full px-8 py-5 text-white shadow-xl transition-all disabled:cursor-not-allowed disabled:opacity-40 bg-gradient-to-r from-[#FF8C00] to-[#FFB347] shadow-orange-200 hover:scale-[1.02]"
-        >
-          <span className="text-xl font-semibold tracking-[0.18em]">
-            SIGN
-          </span>
-          <span className="text-sm font-medium tracking-wider">
-            Good Morning
-          </span>
-        </button>
       </div>
 
       <p className="mt-4 text-center text-sm text-[#8A97AE]">
         {isRecording
           ? "Listening now. The caption updates as you speak."
           : isTranscribing
-            ? "Processing your recording."
-            : "Use LISTEN to generate speech input, or SIGN to demo the avatar."}
+            ? "Uploading your recording for transcription."
+            : "Tap LISTEN to start speaking."}
       </p>
     </>
   );

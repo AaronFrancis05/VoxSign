@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Layout, Button, Badge, Drawer } from "antd";
 import {
   BellOutlined,
@@ -12,6 +12,7 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { useRouter, usePathname } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 const { Header, Content, Footer } = Layout;
 
@@ -20,9 +21,31 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [loading, user, router]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8F9FA]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-[#2E6BFF] border-t-transparent" />
+          <p className="text-sm font-semibold text-[#2E6BFF]">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const navItems = [
     { label: "Home", icon: <HomeOutlined />, path: "/dashboard" },
