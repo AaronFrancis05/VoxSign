@@ -140,7 +140,7 @@ def transcribe_with_fasterwhisper(
 cuda_image = (
     # modal.Image.from_registry("nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04", add_python="3.11")
     modal.Image.from_registry("nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04", add_python="3.11")  # ← cudnn8
-    .apt_install("git")
+    .apt_install("git", "ffmpeg")
     .pip_install(
         "fastapi[standard]",
         "numpy",
@@ -199,6 +199,7 @@ class Transcriber:
     ):
         import tempfile
         import os
+        import subprocess
         import logging
 
         logger = logging.getLogger(__name__)
@@ -220,27 +221,55 @@ class Transcriber:
         header_hex = wav[:16].hex()
         print(f"File header (first 16 bytes): {header_hex}")
 
-        # ✅ Save to temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-            tmp.write(wav)
-            temp_path = tmp.name
-
-        print("Saved temp file:", temp_path)
-
+        # Save to temp file (no .wav hardcode — format is unknown until probed)
+        raw_path = None
+        wav_path = None
         audio_array = None
         try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".audio") as tmp:
+                tmp.write(wav)
+                raw_path = tmp.name
+
+            print("Saved temp file:", raw_path)
+
+            # Try loading directly (works if input is already WAV/PCM)
             try:
-                audio_array, _ = librosa.load(temp_path, sr=SAMPLE_RATE)
-            except Exception as load_err:
-                print(f"AUDIO LOAD FAILURE — Size: {file_size}, Header: {header_hex}, Error: {load_err}")
-                return {"error": f"Failed to decode audio: {load_err}"}
+                audio_array, _ = librosa.load(raw_path, sr=SAMPLE_RATE)
+                print("Decoded directly with librosa — input was already a supported format")
+            except Exception:
+                # Direct decode failed — transcode via ffmpeg to WAV
+                print("Direct librosa decode failed — attempting ffmpeg transcode to WAV")
+                wav_path = raw_path + ".wav"
+                try:
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-i", raw_path, "-ar", str(SAMPLE_RATE),
+                         "-ac", "1", "-sample_fmt", "s16", wav_path],
+                        capture_output=True, text=True, check=True, timeout=120,
+                    )
+                    print(f"ffmpeg transcode succeeded to: {wav_path}")
+                except subprocess.CalledProcessError as proc_err:
+                    print(f"FFMPEG TRANSCODE FAILURE — Size: {file_size}, Header: {header_hex}, "
+                          f"stderr: {proc_err.stderr[:500]}")
+                    return {"error": f"Audio transcoding failed: unsupported format"}
+                except subprocess.TimeoutExpired:
+                    print(f"FFMPEG TIMEOUT — Size: {file_size}, Header: {header_hex}")
+                    return {"error": "Audio transcoding timed out."}
+
+                # Load the transcoded WAV
+                try:
+                    audio_array, _ = librosa.load(wav_path, sr=SAMPLE_RATE)
+                    print("Loaded transcoded WAV successfully")
+                except Exception as load_err:
+                    print(f"AUDIO LOAD FAILURE after ffmpeg — Size: {file_size}, "
+                          f"Header: {header_hex}, Error: {load_err}")
+                    return {"error": f"Failed to decode audio after transcoding: {load_err}"}
 
             if audio_array is None or len(audio_array) == 0:
                 print(f"AUDIO LOAD FAILURE — librosa returned empty array (size={file_size}, header={header_hex})")
                 return {"error": "Decoded audio is empty. The file may be corrupt or silent."}
 
             duration = len(audio_array) / SAMPLE_RATE
-            print(f"Audio loaded successfully. Samples: {len(audio_array)}, Duration: {duration:.2f}s, Format: audio/wav")
+            print(f"Audio loaded successfully. Samples: {len(audio_array)}, Duration: {duration:.2f}s")
 
             try:
                 result = transcribe_with_fasterwhisper(
@@ -258,6 +287,9 @@ class Transcriber:
             return result
 
         finally:
-            os.remove(temp_path)
+            if raw_path and os.path.exists(raw_path):
+                os.remove(raw_path)
+            if wav_path and os.path.exists(wav_path):
+                os.remove(wav_path)
             if audio_array is not None:
                 del audio_array
