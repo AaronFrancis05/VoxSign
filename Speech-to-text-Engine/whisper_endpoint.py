@@ -24,7 +24,7 @@ MODEL_MOUNT_DIR = Path("/models")
 MODEL_DOWNLOAD_DIR = Path("downloads")
 
 GPU = 'L4'
-SCALEDOWN = 60 * 2  # seconds
+SCALEDOWN = 60 * 8  # seconds — keep warm through normal usage sessions
 
 # HUGGINGFACE_REPO = "cdli/whisper-large-v3_finetuned_ugandan_english_nonstandard_speech_v1.0"
 HUGGINGFACE_REPO = "cdli/whisper-small_finetuned_ugandan_english_nonstandard_speech_v1.0"
@@ -188,7 +188,20 @@ class Transcriber:
         model_path = maybe_download_and_convert_model(model_dir, self.model_id)
         self.whisper_model = WhisperModel(model_path, device="cuda", compute_type="float16")
         print("FasterWhisper model successfully loaded and ready")
-        
+
+
+    @modal.fastapi_endpoint(docs=True, method="GET")
+    def warm(self):
+        """Lightweight warm-up endpoint — just confirms the container and model are live.
+        Returns immediately without any transcription work.
+        The frontend calls this when the Signing tab mounts to pre-warm the GPU container
+        so the first real transcription request doesn't pay the full cold-start penalty."""
+        import time
+        is_warm = self.whisper_model is not None
+        print(f"[WARM] Container is {'warm' if is_warm else 'cold (model not loaded)'} "
+              f"— enter() has {'run' if is_warm else 'not run'} yet")
+        return {"status": "warm" if is_warm else "cold", "timestamp": time.time()}
+
 
     @modal.fastapi_endpoint(docs=True, method="POST")
     def transcribe(

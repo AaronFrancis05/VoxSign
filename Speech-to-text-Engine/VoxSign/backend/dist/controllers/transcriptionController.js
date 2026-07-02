@@ -1,4 +1,5 @@
 import apiclient from "../lib/trranscriper_api.js";
+import axios from "axios";
 import fs from "fs";
 // import path from "path";
 // import ffmpeg from "fluent-ffmpeg";
@@ -19,6 +20,24 @@ import fs from "fs";
 //       .save(outputPath);
 //   });
 // };
+const TRANSCRIPTION_API_URL = process.env.TRANSCRIPTION_API_URL;
+export const warmUpModal = async (_req, res) => {
+    try {
+        const warmUrl = TRANSCRIPTION_API_URL?.replace("-transcribe.modal.run", "-warm.modal.run");
+        if (!warmUrl) {
+            console.warn("[WarmUp] TRANSCRIPTION_API_URL not set — skipping warm-up");
+            return res.json({ status: "skipped" });
+        }
+        const response = await axios.get(warmUrl, { timeout: 60000 });
+        console.log("[WarmUp] Modal warm response:", JSON.stringify(response.data));
+        res.json(response.data);
+    }
+    catch (error) {
+        // Warm-up is purely an optimization — failure must never surface to the user
+        console.warn("[WarmUp] Ping failed (non-critical):", error.message);
+        res.json({ status: "unreachable" });
+    }
+};
 export const transcribeAudio = async (req, res) => {
     let inputPath;
     try {

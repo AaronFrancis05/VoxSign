@@ -76,6 +76,22 @@ export default function DashboardPage() {
     setShowPatienceMessage(false);
   }, [isTranscribing]);
 
+  const warmUpFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (activeTab !== "signing") {
+      warmUpFiredRef.current = false;
+      return;
+    }
+
+    if (warmUpFiredRef.current) return;
+    warmUpFiredRef.current = true;
+
+    fetch("/api/transcribe/warm").catch(() => {
+      /* warm-up is purely an optimization — failure is silently ignored */
+    });
+  }, [activeTab]);
+
   const stopMediaStream = () => {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     mediaStreamRef.current = null;
