@@ -23,7 +23,7 @@ import fs from "fs";
 const TRANSCRIPTION_API_URL = process.env.TRANSCRIPTION_API_URL;
 export const warmUpModal = async (_req, res) => {
     try {
-        const warmUrl = TRANSCRIPTION_API_URL?.replace("-transcribe.modal.run", "-warm.modal.run");
+        const warmUrl = TRANSCRIPTION_API_URL?.replace(/-transcriber-(?:transcribe|t-\w+)\.modal\.run\/?$/, "-transcriber-warm.modal.run");
         if (!warmUrl) {
             console.warn("[WarmUp] TRANSCRIPTION_API_URL not set — skipping warm-up");
             return res.json({ status: "skipped" });
