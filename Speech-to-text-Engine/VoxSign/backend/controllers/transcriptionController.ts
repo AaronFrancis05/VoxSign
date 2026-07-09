@@ -1,85 +1,47 @@
 import type { Request, Response } from "express";
 import apiclient from "../lib/trranscriper_api.js";
-import axios from "axios";
-import fs from "fs";
-// import path from "path";
-// import ffmpeg from "fluent-ffmpeg";
+import { pingModalWarm } from "../lib/modalWarmPing.js";
+import crypto from "node:crypto";
 
-// const convertWebmToWav = (
-//   inputPath: string,
-//   outputPath: string,
-// ): Promise<void> => {
-//   return new Promise((resolve, reject) => {
-//     ffmpeg(inputPath)
-//       .toFormat("wav")
-//       .on("error", (err: any) => {
-//         console.error("FFmpeg error:", err);
-//         reject(err);
-//       })
-//       .on("end", () => {
-//         resolve();
-//       })
-//       .save(outputPath);
-//   });
-// };
+const CACHE_MAX = 100;
+const transcriptionCache = new Map<string, any>();
 
-const TRANSCRIPTION_API_URL = process.env.TRANSCRIPTION_API_URL;
+function getCacheKey(buffer: Buffer): string {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
 
 export const warmUpModal = async (_req: Request, res: Response) => {
   try {
-    const warmUrl = TRANSCRIPTION_API_URL?.replace(
-      /-transcriber-(?:transcribe|t-\w+)\.modal\.run\/?$/,
-      "-transcriber-warm.modal.run",
-    );
-    if (!warmUrl) {
-      console.warn("[WarmUp] TRANSCRIPTION_API_URL not set — skipping warm-up");
-      return res.json({ status: "skipped" });
-    }
-    const response = await axios.get(warmUrl, { timeout: 60000 });
-    console.log("[WarmUp] Modal warm response:", JSON.stringify(response.data));
-    res.json(response.data);
+    await pingModalWarm();
+    res.json({ status: "ok" });
   } catch (error: any) {
-    // Warm-up is purely an optimization — failure must never surface to the user
     console.warn("[WarmUp] Ping failed (non-critical):", error.message);
     res.json({ status: "unreachable" });
   }
 };
 
 export const transcribeAudio = async (req: Request, res: Response) => {
-  let inputPath: string | undefined;
-
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No audio file provided" });
     }
-    inputPath = req.file.path;
-    // wavPath = path.join(
-    //   path.dirname(inputPath),
-    //   `${path.basename(inputPath, path.extname(inputPath))}.wav`,
-    // );
-    //
-    // const fileExtension = path
-    //   .extname(req.file.originalname || "")
-    //   .toLowerCase();
-    // const mimeType = (req.file.mimetype || "").toLowerCase();
-    // const isWavInput =
-    //   fileExtension === ".wav" ||
-    //   fileExtension === ".wave" ||
-    //   mimeType.includes("wav");
-    //
-    // if (isWavInput) {
-    //   wavPath = inputPath;
-    // } else {
-    //   await convertWebmToWav(inputPath, wavPath);
-    // }
 
-    const fileBuffer = fs.readFileSync(inputPath);
+    const fileBuffer = req.file.buffer;
     const mimeType = req.file.mimetype || "application/octet-stream";
     const fileName = req.file.originalname || "audio-upload";
 
-    // Using FormData which is available in Node 18+
+    // Exact-match cache: only hits on byte-identical audio (e.g. repeated test clips).
+    // Real live speech recordings are never bit-for-bit identical, so this is a free
+    // safety net for deterministic inputs, not a primary optimization.
+    const cacheKey = getCacheKey(fileBuffer);
+    const cached = transcriptionCache.get(cacheKey);
+    if (cached) {
+      console.log("[Transcription] Cache hit — returning cached result");
+      return res.json(cached);
+    }
+
     const formData = new FormData();
-    const blob = new Blob([fileBuffer], { type: mimeType });
+    const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
     formData.append("wav", blob, fileName);
 
     console.log("[Transcription] Sending to transcription API...");
@@ -87,12 +49,16 @@ export const transcribeAudio = async (req: Request, res: Response) => {
       headers: {
         "Content-Type": "multipart/form-data",
       },
-      timeout: 120000, // 2-minute timeout for cold-start Modal
+      timeout: 120000,
     });
     console.log("[Transcription] Received response from transcription API");
 
-    // Clean up temporary files
-    if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+    // Store in cache with FIFO eviction
+    if (transcriptionCache.size >= CACHE_MAX) {
+      const firstKey = transcriptionCache.keys().next().value;
+      if (firstKey) transcriptionCache.delete(firstKey);
+    }
+    transcriptionCache.set(cacheKey, response.data);
 
     res.json(response.data);
   } catch (error: any) {
@@ -101,9 +67,6 @@ export const transcribeAudio = async (req: Request, res: Response) => {
       JSON.stringify(error.response?.data) || error.message,
       JSON.stringify(error),
     );
-
-    // Clean up on error
-    if (inputPath && fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
 
     res.status(500).json({
       error: "Failed to transcribe audio",

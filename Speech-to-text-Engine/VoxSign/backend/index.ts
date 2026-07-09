@@ -7,6 +7,7 @@ import connectDB from "./lib/db.js";
 import apiRouter from "./routes/index.js";
 import swaggerUi from "swagger-ui-express";
 import path from "path";
+import { pingModalWarm } from "./lib/modalWarmPing.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -23,6 +24,21 @@ app.use("/storage", express.static(path.join(process.cwd(), "storage")));
 connectDB();
 
 app.use("/api", apiRouter);
+
+// Background keepalive: ping the Modal GPU container on boot and every 4 minutes
+// to prevent cold starts between user requests.
+(async () => {
+  try {
+    await pingModalWarm();
+  } catch {
+    console.warn("[Keepalive] Initial Modal ping failed (non-critical)");
+  }
+})();
+setInterval(() => {
+  pingModalWarm().catch((err) =>
+    console.warn("[Keepalive] Modal ping failed (non-critical):", err.message),
+  );
+}, 4 * 60 * 1000);
 
 /**
  * @openapi

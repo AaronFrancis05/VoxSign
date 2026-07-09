@@ -19,12 +19,12 @@ from fastapi import File, Form
 MODAL_APP_NAME = "whisper_endpoint_small_v1"
 
 SAMPLE_RATE = 16000
-BEAM_SIZE = 5
+BEAM_SIZE = 2
 MODEL_MOUNT_DIR = Path("/models")
 MODEL_DOWNLOAD_DIR = Path("downloads")
 
 GPU = 'L4'
-SCALEDOWN = 60 * 8  # seconds — keep warm through normal usage sessions
+SCALEDOWN = 60 * 30  # seconds — keep warm through extended usage sessions
 
 # HUGGINGFACE_REPO = "cdli/whisper-large-v3_finetuned_ugandan_english_nonstandard_speech_v1.0"
 HUGGINGFACE_REPO = "cdli/whisper-small_finetuned_ugandan_english_nonstandard_speech_v1.0"
