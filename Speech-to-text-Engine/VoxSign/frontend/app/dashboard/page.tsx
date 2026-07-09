@@ -2,9 +2,8 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import VoiceWaveform from "@/components/VoiceWaveform";
+import VoiceInputPanel from "@/components/VoiceInputPanel";
 import { message } from "antd";
-import { AudioOutlined } from "@ant-design/icons";
 import api from "@/lib/api";
 import dynamic from "next/dynamic";
 
@@ -226,13 +225,13 @@ export default function DashboardPage() {
     setIsTranscribing(false);
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
-      return;
-    }
-
+  const handlePressStart = () => {
+    if (isRecording || isTranscribing) return;
     void startRecording();
+  };
+
+  const handlePressEnd = () => {
+    stopRecording();
   };
 
   useEffect(() => {
@@ -247,9 +246,11 @@ export default function DashboardPage() {
 
   const transcriptQuote =
     finalTranscript.trim() ||
-    (isRecording || isTranscribing
-      ? "Listening for your speech..."
-      : "Tap LISTEN to start speaking.");
+    (isRecording
+      ? "Listening..."
+      : isTranscribing
+        ? "Got it — translating now..."
+        : "Hold the button and start speaking.");
 
   const renderTabs = () => (
     <div className="w-full rounded-[26px] bg-white/90 p-2 shadow-sm ring-1 ring-[#E5EEF9]">
@@ -280,31 +281,14 @@ export default function DashboardPage() {
     </div>
   );
 
-  const renderRecordingButton = (fullWidth?: boolean) => (
-    <button
-      type="button"
-      onClick={toggleRecording}
-      className={`flex items-center justify-center gap-4 rounded-full px-10 py-5 text-white shadow-xl transition-all ${
-        fullWidth ? "w-full max-w-[240px]" : ""
-      } ${
-        isRecording
-          ? "bg-red-500 shadow-red-200 hover:bg-red-600"
-          : "bg-gradient-to-r from-[#1FB6FF] to-[#2E6BFF] shadow-blue-200 hover:scale-[1.02]"
-      }`}
-    >
-      <div
-        className={`${isRecording ? "bg-white/30" : "bg-white/15"} rounded-full p-3`}
-      >
-        {isRecording ? (
-          <div className="h-5 w-5 rounded-[4px] bg-white" />
-        ) : (
-          <AudioOutlined style={{ fontSize: "24px", color: "white" }} />
-        )}
-      </div>
-      <span className="text-xl font-semibold tracking-[0.18em]">
-        {isRecording ? "STOP" : "LISTEN"}
-      </span>
-    </button>
+  const renderRecordingButton = () => (
+    <VoiceInputPanel
+      mediaStreamRef={mediaStreamRef}
+      isRecording={isRecording}
+      isTranscribing={isTranscribing}
+      onPressStart={handlePressStart}
+      onPressEnd={handlePressEnd}
+    />
   );
 
   const renderAsrTab = () => (
@@ -340,22 +324,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {isRecording && (
-        <div className="mt-4 w-full">
-          <VoiceWaveform mediaStreamRef={mediaStreamRef} isActive={isRecording} />
-        </div>
-      )}
-
       <div className="mt-8 flex w-full justify-center">
         {renderRecordingButton()}
       </div>
 
       <p className="mt-4 text-center text-sm text-[#8A97AE]">
         {isRecording
-          ? "Tap STOP when you're finished speaking."
+          ? "Release when you're finished speaking — it sends instantly."
           : isTranscribing
-            ? "Uploading your recording for transcription."
-            : "Tap LISTEN to start transcribing."}
+            ? "Transcribing your recording..."
+            : "Press and hold the button to start transcribing."}
       </p>
 
       {/* Live stream disabled while websocket/chunk transcription is commented out.
@@ -405,7 +383,11 @@ export default function DashboardPage() {
 
   const renderSigningTab = () => (
     <>
-      <div className="w-full rounded-[34px] bg-gradient-to-b from-[#DFF1FF] to-[#F7FBFF] p-1 shadow-sm ring-1 ring-[#D7E8F8]">
+      <div
+        className={`w-full rounded-[34px] bg-gradient-to-b from-[#DFF1FF] to-[#F7FBFF] p-1 shadow-sm ring-1 ring-[#D7E8F8] transition-shadow duration-300 ${
+          isTranscribing ? "animate-pulse ring-2 ring-[#2E6BFF]" : ""
+        }`}
+      >
         <div className="relative overflow-hidden rounded-[30px] bg-white/70 p-4">
           <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-[#FFD8A8] via-[#FFF0D7] to-[#DDEBFF]" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(59,130,246,0.14),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(251,191,36,0.16),_transparent_30%)]" />
@@ -414,6 +396,7 @@ export default function DashboardPage() {
             <div className="w-full h-full min-h-[320px]">
               <LandingAvatarViewer
                 modelUrl="/good-morning.glb"
+                isRecording={isRecording}
                 triggerAnimation={triggerAnimation}
                 onAnimationComplete={handleAnimationComplete}
               />
@@ -446,22 +429,16 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isRecording && (
-        <div className="mt-4 w-full">
-          <VoiceWaveform mediaStreamRef={mediaStreamRef} isActive={isRecording} />
-        </div>
-      )}
-
       <div className="mt-6 flex w-full justify-center">
         {renderRecordingButton()}
       </div>
 
       <p className="mt-4 text-center text-sm text-[#8A97AE]">
         {isRecording
-          ? "Listening now. The caption updates as you speak."
+          ? "Release to send — VoxSign starts translating the instant you let go."
           : isTranscribing
-            ? "Uploading your recording for transcription."
-            : "Tap LISTEN to start speaking."}
+            ? "Translating your speech into a sign..."
+            : "Press and hold the button to start speaking."}
       </p>
     </>
   );
