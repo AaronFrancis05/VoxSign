@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const [finalTranscript, setFinalTranscript] = useState("");
   const [dots, setDots] = useState("");
   const [triggerAnimation, setTriggerAnimation] = useState(false);
+  const [currentModelUrl, setCurrentModelUrl] = useState("/good-morning.glb");
   const [showPatienceMessage, setShowPatienceMessage] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -140,6 +141,10 @@ export default function DashboardPage() {
       typeof transcription === "string" ? transcription.trim() : "",
     );
     if (normalized.includes("good morning")) {
+      setCurrentModelUrl("/good-morning.glb");
+      setTriggerAnimation(true);
+    } else if (normalized.includes("hello")) {
+      setCurrentModelUrl("/hello.glb");
       setTriggerAnimation(true);
     }
   };
@@ -395,7 +400,7 @@ export default function DashboardPage() {
           <div className="relative mx-auto flex min-h-[340px] max-w-[320px] items-center justify-center rounded-[28px] border border-white/70 bg-gradient-to-b from-[#FFF8F1] via-white to-[#ECF6FF] shadow-[0_18px_40px_rgba(31,82,152,0.15)] overflow-hidden">
             <div className="w-full h-full min-h-[320px]">
               <LandingAvatarViewer
-                modelUrl="/good-morning.glb"
+                modelUrl={currentModelUrl}
                 isRecording={isRecording}
                 triggerAnimation={triggerAnimation}
                 onAnimationComplete={handleAnimationComplete}
