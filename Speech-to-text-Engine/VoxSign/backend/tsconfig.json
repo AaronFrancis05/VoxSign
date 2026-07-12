@@ -48,8 +48,10 @@
     "types",
     "controllers",
     "routes",
-    "schema",
-    "index.ts"
+    "index.ts",
+    "db",
+    "drizzle.config.ts",
+    "middleware"
   ],
   "ts-node": {
     "esm": true

@@ -1,12 +1,17 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { authClient } from "@/lib/auth/client";
+import api from "@/lib/api";
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name?: string;
+  fullName?: string;
   avatar?: string;
+  emailVerified?: boolean;
+  userType?: string;
 }
 
 interface AuthContextType {
@@ -24,16 +29,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("voxsign_user");
-    if (storedUser) {
+    let cancelled = false;
+
+    async function loadSession() {
       try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error("Failed to parse stored user", error);
-        localStorage.removeItem("voxsign_user");
+        const session = await authClient.getSession();
+        if (cancelled) return;
+
+        if (session?.data?.user) {
+          const naUser = session.data.user;
+          const userData: User = {
+            id: naUser.id,
+            email: naUser.email || "",
+            name: naUser.name || undefined,
+            fullName: naUser.name || undefined,
+            avatar: naUser.image || undefined,
+            emailVerified: naUser.emailVerified || false,
+          };
+
+          setUser(userData);
+          localStorage.setItem("voxsign_user", JSON.stringify(userData));
+        } else {
+          setUser(null);
+          localStorage.removeItem("voxsign_user");
+        }
+      } catch {
+        setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
-    setLoading(false);
+
+    loadSession();
+
+    return () => { cancelled = true; };
   }, []);
 
   const login = (userData: User, token: string) => {
@@ -42,10 +71,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("voxsign_token", token);
   };
 
-  const logout = () => {
+  const clearAuthCookies = () => {
+    const cookies = [
+      "__Secure-neon-auth.session_token",
+      "__Secure-neon-auth.local.session_data",
+      "__Secure-neon-auth.session_challange",
+      "neon-auth.session_token",
+      "neon-auth.local.session_data",
+      "neon-auth.session_challange",
+    ];
+    cookies.forEach((name) => {
+      document.cookie = `${name}=; path=/; Secure; Max-Age=0`;
+      document.cookie = `${name}=; path=/; Max-Age=0`;
+    });
+  };
+
+  const logout = async () => {
+    try {
+      await authClient.signOut();
+    } catch {
+      // proceed even if sign-out API call fails
+    }
+    clearAuthCookies();
     setUser(null);
     localStorage.removeItem("voxsign_user");
     localStorage.removeItem("voxsign_token");
+    window.location.href = "/login";
   };
 
   const updateUser = (userData: Partial<User>) => {

@@ -19,10 +19,24 @@ if (typeof window !== "undefined") {
 
 // Add a request interceptor to include the auth token
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("voxsign_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    // Try Neon Auth session token first, fall back to stored token
+    try {
+      const { createAuthClient } = await import("@neondatabase/auth/next");
+      const authClient = createAuthClient();
+      const session = await authClient.getSession();
+      const token = (session as any)?.data?.session?.token;
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        return config;
+      }
+    } catch {
+      // Neon Auth not available, fall through
+    }
+
+    const storedToken = localStorage.getItem("voxsign_token");
+    if (storedToken) {
+      config.headers.Authorization = `Bearer ${storedToken}`;
     }
     return config;
   },
@@ -32,12 +46,3 @@ api.interceptors.request.use(
 );
 
 export default api;
-
-// WebSocket transcription is disabled for now.
-// export const getTranscriptionWebSocketUrl = () => {
-//   const httpUrl = new URL(RESOLVED_API_URL);
-//   httpUrl.protocol = httpUrl.protocol === "https:" ? "wss:" : "ws:";
-//   httpUrl.pathname = "/ws/transcribe";
-//   httpUrl.search = "";
-//   return httpUrl.toString();
-// };
