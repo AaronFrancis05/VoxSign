@@ -1,12 +1,25 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { authClient } from "@/lib/auth/client";
 import { useAuth } from "@/context/AuthContext";
 
 export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#EEF0F2] flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-10 h-10 border-4 border-[#8B7CFF] border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-sm text-[#6B7280] mt-4">Loading...</p>
+      </div>
+    </div>}>
+      <VerifyEmailContent />
+    </Suspense>
+  );
+}
+
+function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailParam = searchParams.get("email") || "";
