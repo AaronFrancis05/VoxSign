@@ -77,7 +77,7 @@ function VerifyEmailContent() {
     } finally {
       setLoading(false);
     }
-  }, [otp, email, refreshSession, updateUser]);
+  }, [otp, email, updateUser]);
 
   const handleChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
