@@ -50,6 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           setUser(userData);
           localStorage.setItem("voxsign_user", JSON.stringify(userData));
+
+          api.post("/auth/me", {}).catch(() => {});
         } else {
           setUser(null);
           localStorage.removeItem("voxsign_user");
@@ -124,6 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         setUser(userData);
         localStorage.setItem("voxsign_user", JSON.stringify(userData));
+
+        api.post("/auth/me", {}).catch(() => {});
       }
     } catch {
       // ignore
