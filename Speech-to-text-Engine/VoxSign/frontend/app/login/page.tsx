@@ -18,7 +18,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      router.push("/dashboard");
+      if (!user.emailVerified) {
+        router.push(`/verify-email?email=${encodeURIComponent(user.email)}`);
+      } else {
+        router.push("/dashboard");
+      }
     }
   }, [user, authLoading, router]);
 

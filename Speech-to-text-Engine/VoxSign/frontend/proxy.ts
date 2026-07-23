@@ -5,5 +5,5 @@ export default auth.middleware({
 });
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/profile/:path*', '/search/:path*', '/learning/:path*'],
+  matcher: ['/dashboard/:path*', '/profile/:path*', '/search/:path*', '/learning/:path*', '/verify-email'],
 };

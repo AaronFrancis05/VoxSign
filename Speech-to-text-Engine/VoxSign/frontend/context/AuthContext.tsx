@@ -20,6 +20,7 @@ interface AuthContextType {
   login: (userData: User, token: string) => void;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -108,8 +109,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const refreshSession = async () => {
+    try {
+      const session = await authClient.getSession();
+      if (session?.data?.user) {
+        const naUser = session.data.user;
+        const userData: User = {
+          id: naUser.id,
+          email: naUser.email || "",
+          name: naUser.name || undefined,
+          fullName: naUser.name || undefined,
+          avatar: naUser.image || undefined,
+          emailVerified: naUser.emailVerified || false,
+        };
+        setUser(userData);
+        localStorage.setItem("voxsign_user", JSON.stringify(userData));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );
