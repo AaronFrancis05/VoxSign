@@ -23,7 +23,7 @@ function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailParam = searchParams.get("email") || "";
-  const { user, loading: authLoading, updateUser } = useAuth();
+  const { user, loading: authLoading, updateUser, refreshSession } = useAuth();
 
   const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
@@ -56,18 +56,23 @@ function VerifyEmailContent() {
     setError(null);
 
     try {
-      const { error: verifyError } = await authClient.emailOtp.verifyEmail({
+      const { data, error: verifyError } = await authClient.emailOtp.verifyEmail({
         email,
         otp: otpCode,
       });
 
       if (verifyError) throw verifyError;
 
-      updateUser({ emailVerified: true });
+      if (data?.session) {
+        await refreshSession();
+      } else {
+        updateUser({ emailVerified: true });
+      }
+
       setVerified(true);
 
       setTimeout(() => {
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
       }, 2600);
     } catch (err: any) {
       const message = err?.message || "Invalid or expired code. Please try again.";
@@ -77,7 +82,7 @@ function VerifyEmailContent() {
     } finally {
       setLoading(false);
     }
-  }, [otp, email, updateUser, router]);
+  }, [otp, email, refreshSession, updateUser]);
 
   const handleChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return;
@@ -115,9 +120,9 @@ function VerifyEmailContent() {
     setError(null);
 
     try {
-      const { error: resendError } = await authClient.sendVerificationEmail({
+      const { error: resendError } = await authClient.emailOtp.sendVerificationOtp({
         email,
-        callbackURL: `${window.location.origin}/dashboard`,
+        type: "email-verification",
       });
 
       if (resendError) throw resendError;

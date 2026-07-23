@@ -29,7 +29,7 @@ export default function SignUpPage() {
     setError(null);
 
     try {
-      const { data: signUpData, error: signUpError } = await authClient.signUp.email({
+      const { error: signUpError } = await authClient.signUp.email({
         name,
         email,
         password,
@@ -38,11 +38,7 @@ export default function SignUpPage() {
         setError(signUpError.message || "Failed to create account");
         return;
       }
-      if (signUpData?.user && !signUpData.user.emailVerified) {
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-        return;
-      }
-      router.push("/dashboard");
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
       setError(err?.message || "Something went wrong");
     } finally {
