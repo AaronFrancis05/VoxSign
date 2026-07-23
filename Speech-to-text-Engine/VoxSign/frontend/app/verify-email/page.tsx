@@ -23,7 +23,7 @@ function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailParam = searchParams.get("email") || "";
-  const { user, loading: authLoading, updateUser, refreshSession } = useAuth();
+  const { user, loading: authLoading, updateUser } = useAuth();
 
   const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
@@ -56,19 +56,14 @@ function VerifyEmailContent() {
     setError(null);
 
     try {
-      const { data, error: verifyError } = await authClient.emailOtp.verifyEmail({
+      const { error: verifyError } = await authClient.emailOtp.verifyEmail({
         email,
         otp: otpCode,
       });
 
       if (verifyError) throw verifyError;
 
-      if (data?.session) {
-        await refreshSession();
-      } else {
-        updateUser({ emailVerified: true });
-      }
-
+      updateUser({ emailVerified: true });
       setVerified(true);
 
       setTimeout(() => {
