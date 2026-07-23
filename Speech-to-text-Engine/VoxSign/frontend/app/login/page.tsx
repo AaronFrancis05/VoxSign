@@ -37,7 +37,7 @@ export default function LoginPage() {
         setError(signInError.message || "Failed to sign in");
         return;
       }
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: any) {
       setError(err?.message || "Something went wrong");
     } finally {
